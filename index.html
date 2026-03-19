@@ -63,12 +63,57 @@
                         hover:file:bg-emerald-500/20 file:cursor-pointer file:transition-colors cursor-pointer w-48"/>
                 </div>
 
-                <button id="reset-btn" class="ml-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg border border-gray-600 transition-all text-sm font-medium shadow-sm active:scale-95">
-                    Effacer
-                </button>
+                <div class="flex gap-2 ml-2">
+                    <button id="export-btn" class="hidden px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg border border-indigo-500 transition-all text-sm font-medium shadow-[0_0_10px_rgba(79,70,229,0.3)] active:scale-95 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Exporter
+                    </button>
+                    <button id="reset-btn" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg border border-gray-600 transition-all text-sm font-medium shadow-sm active:scale-95">
+                        Effacer
+                    </button>
+                </div>
             </div>
         </div>
     </header>
+
+    <!-- Dashboard & Filters -->
+    <div id="dashboard" class="hidden transition-all duration-500 bg-gray-900/40 border-b border-gray-800/80 px-6 py-3 backdrop-blur-sm">
+        <div class="max-w-full flex items-center justify-between">
+            <div class="flex items-center gap-8">
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">Santé globale</span>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <div class="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                            <div id="health-bar" class="h-full bg-emerald-500 transition-all duration-1000" style="width: 0%"></div>
+                        </div>
+                        <span id="health-pct" class="text-xs font-mono font-bold text-emerald-400">-%</span>
+                    </div>
+                </div>
+                
+                <div class="flex gap-4">
+                    <div class="bg-gray-800/40 border border-gray-700/50 rounded-lg px-3 py-1.5 flex items-center gap-3">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] text-gray-500 font-bold uppercase leading-none">Alertes</span>
+                            <span id="dash-alerts" class="text-sm font-bold text-amber-500">0</span>
+                        </div>
+                        <div class="w-px h-6 bg-gray-700/50"></div>
+                        <div class="flex flex-col">
+                            <span class="text-[10px] text-gray-500 font-bold uppercase leading-none">Multi-phrases</span>
+                            <span id="dash-multi" class="text-sm font-bold text-indigo-400">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-semibold text-gray-400">Filtrer :</span>
+                <div class="flex p-1 bg-gray-800/80 border border-gray-700 rounded-lg">
+                    <button id="filter-all" class="px-3 py-1 text-xs font-bold rounded-md transition-all bg-gray-700 text-white shadow-sm">Tout</button>
+                    <button id="filter-alerts" class="px-3 py-1 text-xs font-bold rounded-md transition-all text-gray-400 hover:text-white">Alertes seules</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Workspace -->
     <main class="flex-1 relative flex flex-col min-h-0 bg-gray-950">
@@ -117,6 +162,9 @@
             </div>
         </div>
     </footer>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed bottom-20 right-6 flex flex-col gap-2 z-[100]"></div>
 
     <script src="app.js"></script>
 </body>
