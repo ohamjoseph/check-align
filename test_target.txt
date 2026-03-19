@@ -1,0 +1,9 @@
+This is the first line of the target text.
+Here is a second line, it's short.
+Line three.
+A fourth line that is completely normal.
+Fifth line.
+Sixth line.
+Another normal line.
+The last line of the initial file.
+And an extra line to show a mismatch at the end.

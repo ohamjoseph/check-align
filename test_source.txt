@@ -1,0 +1,9 @@
+Ceci est la première ligne du texte source.
+Voici une deuxième ligne courte.
+La troisième ligne est beaucoup plus longue que les autres pour tester si l'analyseur de longueur fonctionne correctement et déclenche une alerte appropriée.
+Une quatrième ligne normale.
+Cinquième ligne.
+Sixième ligne.
+Cette ligne va être supprimée dans la cible pour simuler un désalignement total.
+Une autre ligne normale.
+Dernière ligne du fichier source.
