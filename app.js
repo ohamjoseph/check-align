@@ -276,6 +276,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    linesContainer.addEventListener('change', (e) => {
+        const checkbox = e.target.closest('.row-checkbox');
+        if (checkbox) {
+            const index = parseInt(checkbox.getAttribute('data-index'), 10);
+            if (checkbox.checked) selectedRows.add(index); else selectedRows.delete(index);
+            updateBulkActionsUI();
+            renderVisibleLines();
+        }
+    });
+
     linesContainer.addEventListener('click', (e) => {
         const insertBtn = e.target.closest('.insert-btn');
         const deleteBtn = e.target.closest('.delete-btn');
@@ -290,20 +300,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (insertBtn) { if (side === 'source') sourceLines.splice(index, 0, ''); else targetLines.splice(index, 0, ''); }
             else if (deleteBtn) { if (side === 'source') sourceLines.splice(index, 1); else targetLines.splice(index, 1); }
             renderViewer();
-        } else if (checkbox) {
+        } else if (checkbox && e.shiftKey) {
+            // Shift+Click logic (handled here because 'change' doesn't have shiftKey easily)
             const index = parseInt(checkbox.getAttribute('data-index'), 10);
-            if (e.shiftKey && lastCheckedIndex !== null) {
+            if (lastCheckedIndex !== null) {
                 const start = Math.min(index, lastCheckedIndex);
                 const end = Math.max(index, lastCheckedIndex);
+                const shouldCheck = checkbox.checked;
                 for (let i = start; i <= end; i++) {
-                    if (checkbox.checked) selectedRows.add(i); else selectedRows.delete(i);
+                    if (shouldCheck) selectedRows.add(i); else selectedRows.delete(i);
                 }
-            } else {
-                if (checkbox.checked) selectedRows.add(index); else selectedRows.delete(index);
-                lastCheckedIndex = index;
+                updateBulkActionsUI();
+                renderVisibleLines();
             }
-            updateBulkActionsUI();
-            renderVisibleLines();
+        } else if (checkbox) {
+            lastCheckedIndex = parseInt(checkbox.getAttribute('data-index'), 10);
         } else if (cell && e.ctrlKey) {
             const input = cell.querySelector('.editable-cell');
             const index = input.getAttribute('data-index');
