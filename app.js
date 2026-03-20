@@ -226,18 +226,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     exportBtn.addEventListener('click', () => {
-        if (sourceLines.length === 0 && targetLines.length === 0) return;
+        const maxLines = Math.max(sourceLines.length, targetLines.length);
+        if (maxLines === 0) return;
+
         const fmt = (n) => { 
             const sanitized = (n || "source").replace(/[^\x20-\x7E]/g, '').trim();
             const p = sanitized.split('.'); let e = p.length > 1 ? '.' + p.pop() : '.txt'; 
             if (e === '.') e = '.txt'; return `[ALIGN]_` + p.join('.') + e; 
         };
-        const sBlob = sourceLines.join('\r\n'); const tBlob = targetLines.join('\r\n');
-        const name1 = fmt(sourceFileName); const name2 = fmt(targetFileName);
+
+        // Ensure both files have exactly maxLines lines
+        const sOutput = [];
+        const tOutput = [];
+        for (let i = 0; i < maxLines; i++) {
+            sOutput.push(sourceLines[i] !== undefined ? sourceLines[i] : '');
+            tOutput.push(targetLines[i] !== undefined ? targetLines[i] : '');
+        }
+
+        // Join with \n and ensure a trailing newline if not empty
+        const sBlob = sOutput.join('\n') + (maxLines > 0 ? '\n' : '');
+        const tBlob = tOutput.join('\n') + (maxLines > 0 ? '\n' : '');
+        
+        const name1 = fmt(sourceFileName); 
+        const name2 = fmt(targetFileName);
         
         showToast("Lancement de l'exportation...", "info");
         
-        // Split downloads with a small delay to avoid browser blocking
         downloadFile(sBlob, name1);
         setTimeout(() => {
             downloadFile(tBlob, name2);
@@ -246,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function downloadFile(content, filename) {
-        const blob = new Blob(['\ufeff', content], { type: 'application/octet-stream' });
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); 
         a.href = url; a.download = filename; a.rel = 'noopener';
