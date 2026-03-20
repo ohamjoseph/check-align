@@ -20,12 +20,23 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const filterAll = document.getElementById('filter-all');
     const filterAlerts = document.getElementById('filter-alerts');
+    
+    // New UI elements
+    const bulkActions = document.getElementById('bulk-actions');
+    const selectedCountSpan = document.getElementById('selected-count');
+    const deleteSelectedRowsBtn = document.getElementById('delete-selected-rows');
+    const deleteSelectedCellsBtn = document.getElementById('delete-selected-cells');
+    const selectAllRowsCheckbox = document.getElementById('select-all-rows');
 
-    let sourceLines = [];
-    let targetLines = [];
     let sourceFileName = 'source.txt';
     let targetFileName = 'target.txt';
     let activeFilter = 'all';
+    let selectedRows = new Set();
+    let selectedCells = new Set(); // Stores "index-side"
+    let lastCheckedIndex = null;
+
+    const ROW_HEIGHT = 73; 
+    const VISIBLE_BUFFER = 10;
 
     const CONFIG = {
         ratioWarningMin: 0.5,
@@ -35,6 +46,12 @@ document.addEventListener('DOMContentLoaded', () => {
         lengthDiffWarning: 50,
         lengthDiffDanger: 100
     };
+    
+    // Resize observer to update visible rows
+    const resizeObserver = new ResizeObserver(() => {
+        requestAnimationFrame(renderVisibleLines);
+    });
+    resizeObserver.observe(linesContainer);
 
     function showToast(message, type = 'info') {
         const toast = document.createElement('div');
@@ -67,6 +84,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 targetLines = targetText.split(/\r?\n/);
                 exportBtn.classList.remove('hidden');
                 dashboard.classList.remove('hidden');
+                selectedRows.clear();
+                selectedCells.clear();
+                updateBulkActionsUI();
                 renderViewer();
                 showToast("Fichiers chargés avec succès");
             }).catch(error => {
@@ -91,7 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return matches ? matches.length : (text.trim().length > 0 ? 1 : 0);
     }
 
+    const analysisCache = new Map();
     function analyzeAlignment(source, target) {
+        const key = `${source}|||${target}`;
+        if (analysisCache.has(key)) return analysisCache.get(key);
+
         if (!source && !target) return { status: 'ok', ratio: '—', text: 'Vide', multiSentences: false };
         if (!source) return { status: 'danger', ratio: '∞', text: 'Cible seule', multiSentences: false };
         if (!target) return { status: 'danger', ratio: '0', text: 'Source seule', multiSentences: false };
@@ -100,17 +124,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const sourceSentences = countSentences(source);
         const targetSentences = countSentences(target);
         const multiSentences = sourceSentences > 1 || targetSentences > 1;
-        if (sourceWords === 0 && targetWords === 0) return { status: 'ok', ratio: '—', text: 'Vide', multiSentences };
-        const ratio = sourceWords === 0 ? 99 : (targetWords / sourceWords);
-        const formattedRatio = ratio.toFixed(1);
-        let status = 'ok';
-        let text = `${formattedRatio}x mots`;
-        if (ratio <= CONFIG.ratioDangerMin || ratio >= CONFIG.ratioDangerMax) status = 'danger';
-        else if (ratio <= CONFIG.ratioWarningMin || ratio >= CONFIG.ratioWarningMax) status = 'warning';
-        const lenDiff = Math.abs(target.length - source.length);
-        if (lenDiff > CONFIG.lengthDiffDanger) status = 'danger';
-        else if (lenDiff > CONFIG.lengthDiffWarning && status === 'ok') status = 'warning';
-        return { status, ratio: formattedRatio, text, multiSentences };
+        
+        let result = { status: 'ok', ratio: '—', text: 'Vide', multiSentences };
+        if (sourceWords === 0 && targetWords === 0) { } else {
+            const ratio = sourceWords === 0 ? 99 : (targetWords / sourceWords);
+            const formattedRatio = ratio.toFixed(1);
+            let status = 'ok';
+            let text = `${formattedRatio}x mots`;
+            if (ratio <= CONFIG.ratioDangerMin || ratio >= CONFIG.ratioDangerMax) status = 'danger';
+            else if (ratio <= CONFIG.ratioWarningMin || ratio >= CONFIG.ratioWarningMax) status = 'warning';
+            const lenDiff = Math.abs(target.length - source.length);
+            if (lenDiff > CONFIG.lengthDiffDanger) status = 'danger';
+            else if (lenDiff > CONFIG.lengthDiffWarning && status === 'ok') status = 'warning';
+            result = { status, ratio: formattedRatio, text, multiSentences };
+        }
+        analysisCache.set(key, result);
+        return result;
     }
 
     function renderViewer() {
@@ -118,20 +147,45 @@ document.addEventListener('DOMContentLoaded', () => {
         viewer.classList.remove('hidden'); viewer.classList.add('flex');
         viewer.classList.replace('opacity-0', 'opacity-100');
         statsFooter.classList.remove('hidden');
-        linesContainer.innerHTML = ''; 
+        renderVisibleLines();
+    }
+
+    function renderVisibleLines() {
         const maxLines = Math.max(sourceLines.length, targetLines.length);
-        let alertCount = 0; let multiCount = 0;
-        const fragment = document.createDocumentFragment();
+        
+        const filteredIndices = [];
         for (let i = 0; i < maxLines; i++) {
+            if (activeFilter === 'alerts') {
+                const analysis = analyzeAlignment(sourceLines[i] || '', targetLines[i] || '');
+                if (analysis.status === 'ok') continue;
+            }
+            filteredIndices.push(i);
+        }
+
+        const containerVisibleHeight = linesContainer.clientHeight || 500;
+        const visibleCount = Math.ceil(containerVisibleHeight / ROW_HEIGHT);
+        const start = Math.max(0, Math.floor(linesContainer.scrollTop / ROW_HEIGHT) - VISIBLE_BUFFER);
+        const end = Math.min(filteredIndices.length, start + visibleCount + (VISIBLE_BUFFER * 2));
+
+        linesContainer.innerHTML = '';
+        const spacerTop = document.createElement('div');
+        spacerTop.style.height = `${start * ROW_HEIGHT}px`;
+        linesContainer.appendChild(spacerTop);
+
+        const fragment = document.createDocumentFragment();
+        for (let j = start; j < end; j++) {
+            const i = filteredIndices[j];
             const source = sourceLines[i] !== undefined ? sourceLines[i] : '';
             const target = targetLines[i] !== undefined ? targetLines[i] : '';
             const analysis = analyzeAlignment(source, target);
-            if (analysis.status !== 'ok') alertCount++;
-            if (analysis.multiSentences) multiCount++;
-            const isHidden = activeFilter === 'alerts' && analysis.status === 'ok';
+            
+            const rowSelected = selectedRows.has(i);
+            const sCellSelected = selectedCells.has(`${i}-source`);
+            const tCellSelected = selectedCells.has(`${i}-target`);
+
             const row = document.createElement('div');
             row.id = `row-${i}`;
-            row.className = `grid grid-cols-[1fr_140px_1fr] md:grid-cols-[1fr_160px_1fr] border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors group ${isHidden ? 'hidden' : ''}`;
+            row.className = `grid grid-cols-[40px_1fr_140px_1fr] md:grid-cols-[40px_1fr_160px_1fr] border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors group ${rowSelected ? 'selected-row' : ''}`;
             if (analysis.status === 'danger') row.classList.add('bg-rose-500/5');
             else if (analysis.status === 'warning') row.classList.add('bg-amber-500/5');
             else if (analysis.multiSentences) row.classList.add('bg-indigo-500/5');
@@ -141,7 +195,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                'bg-gray-800 text-gray-400 border-gray-700 group-hover:border-gray-600';
 
             row.innerHTML = `
-                <div class="py-4 px-4 text-sm text-gray-300 leading-relaxed border-r border-gray-800/30 relative group/cell">
+                <div class="flex items-center justify-center border-r border-gray-800/30">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" class="row-checkbox" data-index="${i}" ${rowSelected ? 'checked' : ''}>
+                        <span class="cb-checkmark"></span>
+                    </label>
+                </div>
+                <div class="py-4 px-4 text-sm text-gray-300 leading-relaxed border-r border-gray-800/30 relative group/cell ${sCellSelected ? 'selected-cell' : ''}">
                     <div class="editable-cell outline-none focus:bg-gray-800/60 rounded px-2 -mx-2 transition-colors min-h-[1.5rem]" contenteditable="plaintext-only" data-index="${i}" data-side="source">${escapeHtml(source)}</div>
                     <div class="absolute top-1 right-2 flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
                         <button class="insert-btn bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 rounded p-1" data-index="${i}" data-side="source"><svg class="w-3 h-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg></button>
@@ -153,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="px-2 py-1 rounded-full text-xs font-bold border whitespace-nowrap ${colorClass}">${analysis.text}</span>
                     ${analysis.multiSentences ? '<div class="mt-2 text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 inline-block uppercase tracking-wider">Multi-phrases</div>' : ''}
                 </div>
-                <div class="py-4 px-4 text-sm text-gray-300 leading-relaxed border-l border-gray-800/30 relative group/cell">
+                <div class="py-4 px-4 text-sm text-gray-300 leading-relaxed border-l border-gray-800/30 relative group/cell ${tCellSelected ? 'selected-cell' : ''}">
                     <div class="editable-cell outline-none focus:bg-gray-800/60 rounded px-2 -mx-2 transition-colors min-h-[1.5rem]" contenteditable="plaintext-only" data-index="${i}" data-side="target">${escapeHtml(target)}</div>
                     <div class="absolute top-1 right-2 flex gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
                         <button class="insert-btn bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 rounded p-1" data-index="${i}" data-side="target"><svg class="w-3 h-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg></button>
@@ -163,10 +223,27 @@ document.addEventListener('DOMContentLoaded', () => {
             fragment.appendChild(row);
         }
         linesContainer.appendChild(fragment);
-        updateGlobalStats(maxLines, alertCount, multiCount);
+        
+        const spacerBottom = document.createElement('div');
+        spacerBottom.style.height = `${(filteredIndices.length - end) * ROW_HEIGHT}px`;
+        linesContainer.appendChild(spacerBottom);
+        
+        updateGlobalStats(maxLines);
+        selectAllRowsCheckbox.checked = selectedRows.size > 0 && selectedRows.size === maxLines;
     }
 
-    function updateGlobalStats(total, alerts, multi) {
+    linesContainer.addEventListener('scroll', () => {
+        requestAnimationFrame(renderVisibleLines);
+    });
+
+    function updateGlobalStats(totalOverride) {
+        const total = totalOverride || Math.max(sourceLines.length, targetLines.length);
+        let alerts = 0; let multi = 0;
+        for (let i = 0; i < total; i++) {
+            const analysis = analyzeAlignment(sourceLines[i] || '', targetLines[i] || '');
+            if (analysis.status !== 'ok') alerts++;
+            if (analysis.multiSentences) multi++;
+        }
         totalLinesSpan.textContent = total; alertLinesSpan.textContent = alerts;
         dashAlerts.textContent = alerts; dashMulti.textContent = multi;
         const health = total > 0 ? Math.round(((total - alerts) / total) * 100) : 0;
@@ -176,16 +253,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateRowStats(index) {
-        const source = sourceLines[index] !== undefined ? sourceLines[index] : '';
-        const target = targetLines[index] !== undefined ? targetLines[index] : '';
-        const analysis = analyzeAlignment(source, target);
         const statsCol = document.getElementById(`stats-${index}`);
-        const row = document.getElementById(`row-${index}`);
-        if (!statsCol || !row) return;
-        row.classList.remove('bg-rose-500/5', 'bg-amber-500/5', 'bg-indigo-500/5');
-        if (analysis.status === 'danger') row.classList.add('bg-rose-500/5');
-        else if (analysis.status === 'warning') row.classList.add('bg-amber-500/5');
-        else if (analysis.multiSentences) row.classList.add('bg-indigo-500/5');
+        if (!statsCol) return;
+        const source = sourceLines[index] || '';
+        const target = targetLines[index] || '';
+        const analysis = analyzeAlignment(source, target);
         const colorClass = analysis.status === 'danger' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 
                            analysis.status === 'warning' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 
                            'bg-gray-800 text-gray-400 border-gray-700 group-hover:border-gray-600';
@@ -198,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const side = e.target.getAttribute('data-side');
             let text = e.target.innerText || "";
             text = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
+            analysisCache.clear(); // Simple cache invalidation
             if (side === 'source') sourceLines[index] = text; else targetLines[index] = text;
             updateRowStats(index);
         }
@@ -206,6 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
     linesContainer.addEventListener('click', (e) => {
         const insertBtn = e.target.closest('.insert-btn');
         const deleteBtn = e.target.closest('.delete-btn');
+        const checkboxContainer = e.target.closest('.custom-checkbox');
+        const checkbox = checkboxContainer ? checkboxContainer.querySelector('.row-checkbox') : e.target.closest('.row-checkbox');
+        const cell = e.target.closest('.group\\/cell');
+
         if (insertBtn || deleteBtn) {
             const btn = insertBtn || deleteBtn;
             const index = parseInt(btn.getAttribute('data-index'), 10);
@@ -213,7 +290,85 @@ document.addEventListener('DOMContentLoaded', () => {
             if (insertBtn) { if (side === 'source') sourceLines.splice(index, 0, ''); else targetLines.splice(index, 0, ''); }
             else if (deleteBtn) { if (side === 'source') sourceLines.splice(index, 1); else targetLines.splice(index, 1); }
             renderViewer();
+        } else if (checkbox) {
+            const index = parseInt(checkbox.getAttribute('data-index'), 10);
+            if (e.shiftKey && lastCheckedIndex !== null) {
+                const start = Math.min(index, lastCheckedIndex);
+                const end = Math.max(index, lastCheckedIndex);
+                for (let i = start; i <= end; i++) {
+                    if (checkbox.checked) selectedRows.add(i); else selectedRows.delete(i);
+                }
+            } else {
+                if (checkbox.checked) selectedRows.add(index); else selectedRows.delete(index);
+                lastCheckedIndex = index;
+            }
+            updateBulkActionsUI();
+            renderVisibleLines();
+        } else if (cell && e.ctrlKey) {
+            const input = cell.querySelector('.editable-cell');
+            const index = input.getAttribute('data-index');
+            const side = input.getAttribute('data-side');
+            const key = `${index}-${side}`;
+            if (selectedCells.has(key)) selectedCells.delete(key); else selectedCells.add(key);
+            updateBulkActionsUI();
+            renderVisibleLines();
         }
+    });
+
+    selectAllRowsCheckbox.addEventListener('change', () => {
+        const maxLines = Math.max(sourceLines.length, targetLines.length);
+        if (selectAllRowsCheckbox.checked) {
+            for (let i = 0; i < maxLines; i++) selectedRows.add(i);
+        } else {
+            selectedRows.clear();
+        }
+        updateBulkActionsUI();
+        renderVisibleLines();
+    });
+
+    function updateBulkActionsUI() {
+        const count = selectedRows.size + selectedCells.size;
+        if (count > 0) {
+            bulkActions.classList.remove('hidden');
+            bulkActions.classList.add('flex');
+            selectedCountSpan.textContent = `${count} sélectionnés`;
+        } else {
+            bulkActions.classList.add('hidden');
+            bulkActions.classList.remove('flex');
+        }
+    }
+
+    deleteSelectedRowsBtn.addEventListener('click', () => {
+        const sortedIndices = Array.from(selectedRows).sort((a, b) => b - a);
+        if (sortedIndices.length === 0) return;
+        sortedIndices.forEach(index => {
+            sourceLines.splice(index, 1);
+            targetLines.splice(index, 1);
+        });
+        selectedRows.clear();
+        updateBulkActionsUI();
+        renderViewer();
+        showToast(`${sortedIndices.length} lignes supprimées`, "success");
+    });
+
+    deleteSelectedCellsBtn.addEventListener('click', () => {
+        if (selectedCells.size > 0) {
+            selectedCells.forEach(key => {
+                const [index, side] = key.split('-');
+                if (side === 'source') sourceLines[index] = ''; else targetLines[index] = '';
+            });
+            selectedCells.clear();
+        }
+        if (selectedRows.size > 0) {
+            selectedRows.forEach(index => {
+                sourceLines[index] = '';
+                targetLines[index] = '';
+            });
+            selectedRows.clear();
+        }
+        updateBulkActionsUI();
+        renderViewer();
+        showToast(`Eléments vidés`, "success");
     });
 
     filterAll.addEventListener('click', () => setFilter('all'));
@@ -224,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
         filterAlerts.className = `px-3 py-1 text-xs font-bold rounded-md transition-all ${filter === 'alerts' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`;
         renderViewer();
     }
-
     exportBtn.addEventListener('click', () => {
         const maxLines = Math.max(sourceLines.length, targetLines.length);
         if (maxLines === 0) return;
