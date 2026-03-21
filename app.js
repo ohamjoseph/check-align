@@ -147,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         viewer.classList.remove('hidden'); viewer.classList.add('flex');
         viewer.classList.replace('opacity-0', 'opacity-100');
         statsFooter.classList.remove('hidden');
+        updateGlobalStats();
         renderVisibleLines();
     }
 
@@ -228,7 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
         spacerBottom.style.height = `${(filteredIndices.length - end) * ROW_HEIGHT}px`;
         linesContainer.appendChild(spacerBottom);
         
-        updateGlobalStats(maxLines);
         selectAllRowsCheckbox.checked = selectedRows.size > 0 && selectedRows.size === maxLines;
     }
 
@@ -270,9 +270,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const side = e.target.getAttribute('data-side');
             let text = e.target.innerText || "";
             text = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
-            analysisCache.clear(); // Simple cache invalidation
+            
+            // Incremental update of stats would require knowing OLD status.
+            // For now, let's just trigger updateGlobalStats but only periodically or after a delay.
             if (side === 'source') sourceLines[index] = text; else targetLines[index] = text;
             updateRowStats(index);
+            // Throttle stats update
+            if (this.statsTimeout) clearTimeout(this.statsTimeout);
+            this.statsTimeout = setTimeout(() => updateGlobalStats(), 1000);
         }
     });
 
@@ -280,17 +285,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkbox = e.target.closest('.row-checkbox');
         if (checkbox) {
             const index = parseInt(checkbox.getAttribute('data-index'), 10);
+            // Important: Handle both single toggle and Shift+Click by checking current state
             if (checkbox.checked) selectedRows.add(index); else selectedRows.delete(index);
+            
+            // Check if Shift was held during the click that triggered this change
+            if (window.lastShiftKey && lastCheckedIndex !== null) {
+                const start = Math.min(index, lastCheckedIndex);
+                const end = Math.max(index, lastCheckedIndex);
+                const shouldCheck = checkbox.checked;
+                for (let i = start; i <= end; i++) {
+                    if (shouldCheck) selectedRows.add(i); else selectedRows.delete(i);
+                }
+            }
+            
+            lastCheckedIndex = index;
             updateBulkActionsUI();
             renderVisibleLines();
         }
     });
 
+    // Capture Shift key on window to share with 'change' event
+    window.addEventListener('keydown', (e) => { if (e.key === 'Shift') window.lastShiftKey = true; });
+    window.addEventListener('keyup', (e) => { if (e.key === 'Shift') window.lastShiftKey = false; });
+
     linesContainer.addEventListener('click', (e) => {
         const insertBtn = e.target.closest('.insert-btn');
         const deleteBtn = e.target.closest('.delete-btn');
-        const checkboxContainer = e.target.closest('.custom-checkbox');
-        const checkbox = checkboxContainer ? checkboxContainer.querySelector('.row-checkbox') : e.target.closest('.row-checkbox');
         const cell = e.target.closest('.group\\/cell');
 
         if (insertBtn || deleteBtn) {
@@ -300,21 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (insertBtn) { if (side === 'source') sourceLines.splice(index, 0, ''); else targetLines.splice(index, 0, ''); }
             else if (deleteBtn) { if (side === 'source') sourceLines.splice(index, 1); else targetLines.splice(index, 1); }
             renderViewer();
-        } else if (checkbox && e.shiftKey) {
-            // Shift+Click logic (handled here because 'change' doesn't have shiftKey easily)
-            const index = parseInt(checkbox.getAttribute('data-index'), 10);
-            if (lastCheckedIndex !== null) {
-                const start = Math.min(index, lastCheckedIndex);
-                const end = Math.max(index, lastCheckedIndex);
-                const shouldCheck = checkbox.checked;
-                for (let i = start; i <= end; i++) {
-                    if (shouldCheck) selectedRows.add(i); else selectedRows.delete(i);
-                }
-                updateBulkActionsUI();
-                renderVisibleLines();
-            }
-        } else if (checkbox) {
-            lastCheckedIndex = parseInt(checkbox.getAttribute('data-index'), 10);
+            updateGlobalStats();
         } else if (cell && e.ctrlKey) {
             const input = cell.querySelector('.editable-cell');
             const index = input.getAttribute('data-index');
