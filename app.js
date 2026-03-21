@@ -314,11 +314,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const cell = e.target.closest('.group\\/cell');
 
         if (insertBtn || deleteBtn) {
+            e.stopPropagation(); // Prevent cell/row selection logic
             const btn = insertBtn || deleteBtn;
             const index = parseInt(btn.getAttribute('data-index'), 10);
             const side = btn.getAttribute('data-side');
-            if (insertBtn) { if (side === 'source') sourceLines.splice(index, 0, ''); else targetLines.splice(index, 0, ''); }
-            else if (deleteBtn) { if (side === 'source') sourceLines.splice(index, 1); else targetLines.splice(index, 1); }
+            const targetArray = (side === 'source') ? sourceLines : targetLines;
+
+            // Ensure the array is long enough to have an element at 'index'
+            while (targetArray.length < index) {
+                targetArray.push('');
+            }
+
+            // Clear selections as indices are shifting
+            if (selectedRows.size > 0 || selectedCells.size > 0) {
+                selectedRows.clear();
+                selectedCells.clear();
+                updateBulkActionsUI();
+                showToast("Sélection réinitialisée suite à l'ajustement du texte", "info");
+            }
+
+            if (insertBtn) { 
+                targetArray.splice(index, 0, ''); 
+            } else if (deleteBtn) { 
+                if (index < targetArray.length) {
+                    targetArray.splice(index, 1); 
+                }
+            }
+            
             renderViewer();
             updateGlobalStats();
         } else if (cell && e.ctrlKey) {

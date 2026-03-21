@@ -116,3 +116,16 @@
   50% { transform: scale(1.25); }
   100% { transform: scale(1); }
 }
+
+.insert-btn, .delete-btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.insert-btn:hover, .delete-btn:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+}
+
+.insert-btn:active, .delete-btn:active {
+  transform: scale(0.95);
+}
