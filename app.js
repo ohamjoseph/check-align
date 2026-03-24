@@ -80,8 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 readFile(sourceInput.files[0]),
                 readFile(targetInput.files[0])
             ]).then(([sourceText, targetText]) => {
-                sourceLines = sourceText.split(/\r?\n/);
-                targetLines = targetText.split(/\r?\n/);
+                sourceLines = sourceText.replace(/\r?\n$/, '').split(/\r?\n/);
+                targetLines = targetText.replace(/\r?\n$/, '').split(/\r?\n/);
                 exportBtn.classList.remove('hidden');
                 dashboard.classList.remove('hidden');
                 selectedRows.clear();
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.classList.contains('editable-cell')) {
             const index = parseInt(e.target.getAttribute('data-index'), 10);
             const side = e.target.getAttribute('data-side');
-            let text = e.target.innerText || "";
+            let text = (e.target.innerText || "").replace(/\n$/, "");
             text = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
             
             // Incremental update of stats would require knowing OLD status.
