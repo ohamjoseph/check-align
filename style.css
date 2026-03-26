@@ -129,3 +129,20 @@
 .insert-btn:active, .delete-btn:active {
   transform: scale(0.95);
 }
+
+/* New Post-Editing Styles */
+.confirmed-row {
+  background-color: rgba(16, 185, 129, 0.1) !important; /* emerald-500/10 */
+  border-left: 4px solid #10b981 !important;
+}
+
+
+
+.tm-match {
+  color: #818cf8; /* indigo-400 */
+  background-color: rgba(129, 140, 248, 0.1);
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
